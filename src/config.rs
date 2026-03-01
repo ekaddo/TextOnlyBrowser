@@ -14,7 +14,7 @@ pub struct Config {
 }
 
 fn default_home() -> String {
-    "https://news.ycombinator.com".into()
+    "https://text.npr.org".into()
 }
 
 fn default_timeout_secs() -> u64 {

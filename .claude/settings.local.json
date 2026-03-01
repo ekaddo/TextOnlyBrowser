@@ -7,7 +7,8 @@
       "Bash(cargo build)",
       "Bash(powershell.exe -Command \"Get-Command cargo -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
       "Bash(powershell.exe -Command \"Get-ChildItem -Path ''C:\\\\Users\\\\ekadd'' -Filter ''cargo.exe'' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 5 -ExpandProperty FullName\")",
-      "Bash(powershell.exe -Command \"where.exe rustup 2>&1; where.exe cargo 2>&1; where.exe rustc 2>&1\")"
+      "Bash(powershell.exe -Command \"where.exe rustup 2>&1; where.exe cargo 2>&1; where.exe rustc 2>&1\")",
+      "Bash(\"/c/Users/ekadd/.cargo/bin/cargo\" build --manifest-path \"d:/dev/TextOnlyBrowser/TextOnlyBrowser/Cargo.toml\")"
     ]
   }
 }

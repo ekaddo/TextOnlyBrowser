@@ -9,18 +9,16 @@ name = "tob"
 path = "src/main.rs"
 
 [dependencies]
-ratatui        = "0.29"
-crossterm      = { version = "0.28", features = ["event-stream"] }
-tokio          = { version = "1", features = ["full"] }
-reqwest        = { version = "0.12", features = ["gzip", "deflate", "brotli"] }
-scraper        = "0.21"
-serde          = { version = "1", features = ["derive"] }
-toml           = "0.8"
-anyhow         = "1"
-dirs           = "5"
-unicode-width  = "0.1"
-url            = "2"
-futures        = "0.3"
+eframe   = "0.29"
+egui     = "0.29"
+tokio    = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+reqwest  = { version = "0.12", features = ["gzip", "deflate", "brotli"] }
+scraper  = "0.21"
+serde    = { version = "1", features = ["derive"] }
+toml     = "0.8"
+anyhow   = "1"
+dirs     = "5"
+url      = "2"
 
 [profile.release]
 opt-level = 3

@@ -1,5 +1,4 @@
-use ratatui::text::Line;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use std::sync::mpsc;
 
 use crate::{config::Config, history::History, parser::RenderedPage};
 
@@ -10,52 +9,38 @@ pub enum LoadState {
     Error(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Mode {
-    Browse,
-    UrlEntry,
-}
-
 pub enum FetchResult {
     Success(RenderedPage),
     Failure { url: String, message: String },
 }
 
-pub struct App {
+pub struct BrowserApp {
     pub config: Config,
     pub history: History,
     pub page: Option<RenderedPage>,
     pub load_state: LoadState,
-    pub mode: Mode,
-    pub scroll: u16,
-    pub selected_link: Option<usize>,
     pub url_input: String,
-    pub rendered_lines: Vec<Line<'static>>,
-    pub viewport_height: u16,
-    pub should_quit: bool,
+    pub scroll_to_top: bool,
     pub fetch_handle: Option<tokio::task::JoinHandle<()>>,
-    pub rx: UnboundedReceiver<FetchResult>,
-    pub tx: UnboundedSender<FetchResult>,
+    pub rx: mpsc::Receiver<FetchResult>,
+    pub tx: mpsc::SyncSender<FetchResult>,
+    pub rt: tokio::runtime::Handle,
 }
 
-impl App {
-    pub fn new(config: Config) -> Self {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+impl BrowserApp {
+    pub fn new(rt: tokio::runtime::Handle, config: Config) -> Self {
+        let (tx, rx) = mpsc::sync_channel(8);
         Self {
             config,
             history: History::new(),
             page: None,
             load_state: LoadState::Idle,
-            mode: Mode::Browse,
-            scroll: 0,
-            selected_link: None,
             url_input: String::new(),
-            rendered_lines: Vec::new(),
-            viewport_height: 24,
-            should_quit: false,
+            scroll_to_top: false,
             fetch_handle: None,
             rx,
             tx,
+            rt,
         }
     }
 
@@ -67,66 +52,21 @@ impl App {
         }
     }
 
-    pub fn clamp_scroll(&mut self) {
-        let max = (self.rendered_lines.len() as u16).saturating_sub(self.viewport_height);
-        if self.scroll > max {
-            self.scroll = max;
-        }
-    }
-
-    pub fn scroll_up(&mut self, n: u16) {
-        self.scroll = self.scroll.saturating_sub(n);
-    }
-
-    pub fn scroll_down(&mut self, n: u16) {
-        self.scroll = self.scroll.saturating_add(n);
-        self.clamp_scroll();
-    }
-
-    pub fn tab_next(&mut self) {
-        if let Some(page) = &self.page {
-            if page.links.is_empty() {
-                return;
-            }
-            let next = match self.selected_link {
-                None => 1,
-                Some(n) => {
-                    if n >= page.links.len() {
-                        1
-                    } else {
-                        n + 1
-                    }
+    /// Drain the fetch result channel and update state.
+    pub fn poll_fetch_results(&mut self, ctx: &egui::Context) {
+        while let Ok(result) = self.rx.try_recv() {
+            match result {
+                FetchResult::Success(page) => {
+                    self.url_input = page.url.clone();
+                    self.page = Some(page);
+                    self.load_state = LoadState::Idle;
+                    self.scroll_to_top = true;
                 }
-            };
-            self.selected_link = Some(next);
-        }
-    }
-
-    pub fn tab_prev(&mut self) {
-        if let Some(page) = &self.page {
-            if page.links.is_empty() {
-                return;
-            }
-            let prev = match self.selected_link {
-                None => page.links.len(),
-                Some(n) => {
-                    if n <= 1 {
-                        page.links.len()
-                    } else {
-                        n - 1
-                    }
+                FetchResult::Failure { message, .. } => {
+                    self.load_state = LoadState::Error(message);
                 }
-            };
-            self.selected_link = Some(prev);
+            }
+            ctx.request_repaint();
         }
-    }
-
-    pub fn selected_url(&self) -> Option<String> {
-        let page = self.page.as_ref()?;
-        let num = self.selected_link?;
-        page.links
-            .iter()
-            .find(|l| l.number == num)
-            .map(|l| l.url.clone())
     }
 }

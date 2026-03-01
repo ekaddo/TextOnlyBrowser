@@ -1,146 +1,244 @@
-use ratatui::{
-    layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
-    Frame,
+use egui::{Color32, Context, Key, RichText, Sense, TopBottomPanel, Ui, Vec2};
+
+use crate::{
+    app::{BrowserApp, LoadState},
+    browser,
+    parser::Segment,
 };
 
-use crate::app::{App, LoadState, Mode};
+/// Wrapper that implements eframe::App, owning the BrowserApp state and HTTP client.
+pub struct BrowserUi {
+    inner: BrowserApp,
+    client: reqwest::Client,
+}
 
-pub fn draw(f: &mut Frame, app: &mut App) {
-    let area = f.area();
-
-    // Update viewport height (subtract URL bar + status bar)
-    app.viewport_height = area.height.saturating_sub(2);
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1), // URL bar
-            Constraint::Min(0),    // content
-            Constraint::Length(1), // status bar
-        ])
-        .split(area);
-
-    // ── URL bar ─────────────────────────────────────────────────────────────
-    let url_bar_content = match &app.mode {
-        Mode::UrlEntry => {
-            let input = app.url_input.clone();
-            Line::from(vec![
-                Span::styled("URL: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(
-                    input,
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::UNDERLINED),
-                ),
-                Span::styled(
-                    "█",
-                    Style::default().fg(Color::White),
-                ),
-            ])
-        }
-        Mode::Browse => {
-            let url = app.current_url().to_string();
-            let loading = matches!(app.load_state, LoadState::Loading(_));
-            let indicator = if loading { " ⟳" } else { "" };
-            Line::from(vec![
-                Span::styled("  ", Style::default()),
-                Span::styled(
-                    format!("{url}{indicator}"),
-                    Style::default().fg(Color::Cyan),
-                ),
-            ])
-        }
-    };
-
-    let url_bar = Paragraph::new(url_bar_content)
-        .style(Style::default().bg(Color::DarkGray));
-    f.render_widget(url_bar, chunks[0]);
-
-    // ── Content area ─────────────────────────────────────────────────────────
-    let content = if app.rendered_lines.is_empty() {
-        match &app.load_state {
-            LoadState::Loading(url) => vec![Line::from(format!("Loading {}…", url))],
-            LoadState::Idle => vec![Line::from("Press 'u' to enter a URL")],
-            LoadState::Error(e) => vec![Line::from(e.clone())],
-        }
-    } else {
-        app.rendered_lines.clone()
-    };
-
-    let content_widget = Paragraph::new(content)
-        .block(Block::default().borders(Borders::NONE))
-        .wrap(Wrap { trim: false })
-        .scroll((app.scroll, 0));
-    f.render_widget(content_widget, chunks[1]);
-
-    // ── Status bar ────────────────────────────────────────────────────────────
-    let status = build_status(app);
-    let status_bar = Paragraph::new(status)
-        .style(Style::default().bg(Color::DarkGray));
-    f.render_widget(status_bar, chunks[2]);
-
-    // Position cursor when in URL entry mode
-    if app.mode == Mode::UrlEntry {
-        let x = chunks[0].x + 5 + app.url_input.len() as u16; // "URL: " = 5 chars
-        let y = chunks[0].y;
-        f.set_cursor_position((x.min(chunks[0].right().saturating_sub(1)), y));
+impl BrowserUi {
+    pub fn new(inner: BrowserApp, client: reqwest::Client) -> Self {
+        Self { inner, client }
     }
 }
 
-fn build_status(app: &App) -> Line<'static> {
-    let key_style = Style::default()
-        .fg(Color::Yellow)
-        .add_modifier(Modifier::BOLD);
-    let dim_style = Style::default().fg(Color::DarkGray);
+impl eframe::App for BrowserUi {
+    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        // Pick up any completed fetch results
+        self.inner.poll_fetch_results(ctx);
 
-    match &app.mode {
-        Mode::UrlEntry => Line::from(vec![
-            Span::styled("  Enter", key_style),
-            Span::styled(":go  ", dim_style),
-            Span::styled("Esc", key_style),
-            Span::styled(":cancel", dim_style),
-        ]),
-        Mode::Browse => {
-            let link_info = if let Some(page) = &app.page {
-                if !page.links.is_empty() {
-                    let sel = app
-                        .selected_link
-                        .map(|n| format!(" link {}/{}", n, page.links.len()))
-                        .unwrap_or_default();
-                    format!("{sel}  ")
-                } else {
-                    String::new()
-                }
-            } else {
-                String::new()
-            };
+        // While loading, keep repainting so we notice when the result arrives
+        if matches!(self.inner.load_state, LoadState::Loading(_)) {
+            ctx.request_repaint();
+        }
 
-            let back_fwd = format!(
-                "{}{}",
-                if app.history.can_go_back() { "← " } else { "" },
-                if app.history.can_go_forward() { "→ " } else { "" },
+        // ── Top panel: URL bar ───────────────────────────────────────────────
+        TopBottomPanel::top("url_bar").show(ctx, |ui| {
+            self.draw_url_bar(ui, ctx);
+        });
+
+        // ── Bottom panel: status bar ─────────────────────────────────────────
+        TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
+            self.draw_status_bar(ui);
+        });
+
+        // ── Central panel: page content ──────────────────────────────────────
+        egui::CentralPanel::default().show(ctx, |ui| {
+            self.draw_content(ui);
+        });
+    }
+}
+
+impl BrowserUi {
+    fn draw_url_bar(&mut self, ui: &mut Ui, ctx: &Context) {
+        ui.horizontal(|ui| {
+            // Back button
+            let back_btn = ui.add_enabled(
+                self.inner.history.can_go_back(),
+                egui::Button::new("←"),
+            );
+            if back_btn.clicked() {
+                browser::go_back(&mut self.inner, self.client.clone());
+            }
+
+            // Forward button
+            let fwd_btn = ui.add_enabled(
+                self.inner.history.can_go_forward(),
+                egui::Button::new("→"),
+            );
+            if fwd_btn.clicked() {
+                browser::go_forward(&mut self.inner, self.client.clone());
+            }
+
+            // URL text input — takes remaining width minus the Go button
+            let go_width = 32.0;
+            let available = ui.available_width() - go_width - ui.spacing().item_spacing.x;
+            let url_edit = ui.add_sized(
+                [available, ui.spacing().interact_size.y],
+                egui::TextEdit::singleline(&mut self.inner.url_input)
+                    .hint_text("Enter URL…"),
             );
 
-            Line::from(vec![
-                Span::styled("  ↑↓", key_style),
-                Span::styled(":scroll  ", dim_style),
-                Span::styled("1-9", key_style),
-                Span::styled(":follow link  ", dim_style),
-                Span::styled("Tab", key_style),
-                Span::styled(":select  ", dim_style),
-                Span::styled("Enter", key_style),
-                Span::styled(":follow  ", dim_style),
-                Span::styled("b", key_style),
-                Span::styled(":back  ", dim_style),
-                Span::styled("u", key_style),
-                Span::styled(":url  ", dim_style),
-                Span::styled("q", key_style),
-                Span::styled(":quit", dim_style),
-                Span::raw(format!("  {back_fwd}{link_info}")),
-            ])
+            // Submit on Enter
+            if url_edit.lost_focus() && ctx.input(|i| i.key_pressed(Key::Enter)) {
+                self.submit_url();
+            }
+
+            // Go button
+            if ui.button("Go").clicked() {
+                self.submit_url();
+            }
+
+            // Alt+← / Alt+→ keyboard shortcuts (when URL bar is not focused)
+            if !url_edit.has_focus() {
+                if ctx.input(|i| i.modifiers.alt && i.key_pressed(Key::ArrowLeft)) {
+                    browser::go_back(&mut self.inner, self.client.clone());
+                }
+                if ctx.input(|i| i.modifiers.alt && i.key_pressed(Key::ArrowRight)) {
+                    browser::go_forward(&mut self.inner, self.client.clone());
+                }
+            }
+        });
+    }
+
+    fn submit_url(&mut self) {
+        let raw = self.inner.url_input.trim().to_string();
+        if raw.is_empty() {
+            return;
+        }
+        let url = if raw.contains("://") {
+            raw
+        } else {
+            format!("https://{raw}")
+        };
+        browser::navigate_to(&mut self.inner, url, self.client.clone());
+    }
+
+    fn draw_status_bar(&self, ui: &mut Ui) {
+        ui.horizontal(|ui| {
+            match &self.inner.load_state {
+                LoadState::Loading(url) => {
+                    ui.spinner();
+                    ui.label(format!("Loading {url}…"));
+                }
+                LoadState::Error(msg) => {
+                    ui.colored_label(Color32::RED, format!("Error: {msg}"));
+                }
+                LoadState::Idle => {
+                    if let Some(page) = &self.inner.page {
+                        let links = page.links.len();
+                        if links > 0 {
+                            ui.label(
+                                RichText::new(format!("{links} links — click or use ← → to navigate"))
+                                    .color(Color32::GRAY)
+                                    .small(),
+                            );
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    fn draw_content(&mut self, ui: &mut Ui) {
+        // Collect any link URL the user clicks — resolved after the scroll area
+        // borrow ends to avoid conflicting borrows on self.
+        let mut navigate_to: Option<String> = None;
+
+        let mut scroll = egui::ScrollArea::vertical();
+        if self.inner.scroll_to_top {
+            self.inner.scroll_to_top = false;
+            scroll = scroll.scroll_offset(Vec2::ZERO);
+        }
+
+        scroll.show(ui, |ui| {
+            match &self.inner.load_state {
+                LoadState::Loading(_) => {
+                    ui.centered_and_justified(|ui| {
+                        ui.spinner();
+                    });
+                    return;
+                }
+                LoadState::Error(msg) => {
+                    ui.colored_label(Color32::RED, msg.clone());
+                    return;
+                }
+                LoadState::Idle => {}
+            }
+
+            if let Some(page) = &self.inner.page {
+                // Title
+                ui.heading(RichText::new(&page.title).strong());
+                ui.separator();
+                ui.add_space(4.0);
+
+                for para in &page.paragraphs {
+                    // Check for a horizontal rule
+                    if matches!(para.first(), Some(Segment::Text(t)) if t.starts_with('─')) {
+                        ui.separator();
+                        continue;
+                    }
+
+                    ui.horizontal_wrapped(|ui| {
+                        // Tighten spacing so words flow naturally
+                        ui.spacing_mut().item_spacing.x = 3.0;
+
+                        for segment in para {
+                            match segment {
+                                Segment::Text(text) => {
+                                    // Detect heading prefix (# ## ###)
+                                    let trimmed = text.trim_start_matches('#');
+                                    let hashes = text.len() - trimmed.len();
+                                    if hashes > 0 && text.starts_with('#') {
+                                        let size = match hashes {
+                                            1 => 20.0,
+                                            2 => 17.0,
+                                            _ => 15.0,
+                                        };
+                                        let label_text = trimmed.trim();
+                                        if !label_text.is_empty() {
+                                            ui.label(
+                                                RichText::new(label_text)
+                                                    .strong()
+                                                    .size(size),
+                                            );
+                                        }
+                                    } else {
+                                        // Emit word by word so horizontal_wrapped can wrap
+                                        for word in text.split_whitespace() {
+                                            ui.label(word);
+                                        }
+                                    }
+                                }
+                                Segment::Link { number, text } => {
+                                    let label = format!("[{number}] {text}");
+                                    let resp = ui.add(
+                                        egui::Label::new(
+                                            RichText::new(label)
+                                                .color(Color32::from_rgb(100, 180, 255))
+                                                .underline(),
+                                        )
+                                        .sense(Sense::click()),
+                                    );
+                                    if let Some(link) =
+                                        page.links.iter().find(|l| l.number == *number)
+                                    {
+                                        let resp = resp.on_hover_text(link.url.clone());
+                                        if resp.clicked() {
+                                            navigate_to = Some(link.url.clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } else {
+                ui.centered_and_justified(|ui| {
+                    ui.label("Enter a URL above to start browsing.");
+                });
+            }
+        });
+
+        // Navigate after the scroll area borrow ends
+        if let Some(url) = navigate_to {
+            browser::navigate_to(&mut self.inner, url, self.client.clone());
         }
     }
 }
