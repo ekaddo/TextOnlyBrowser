@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"D:/dev/TextOnlyBrowser/TextOnlyBrowser/\" log --oneline)",
+      "WebFetch(domain:crates.io)",
+      "WebFetch(domain:docs.rs)",
+      "Bash(cargo build)",
+      "Bash(powershell.exe -Command \"Get-Command cargo -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem -Path ''C:\\\\Users\\\\ekadd'' -Filter ''cargo.exe'' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 5 -ExpandProperty FullName\")",
+      "Bash(powershell.exe -Command \"where.exe rustup 2>&1; where.exe cargo 2>&1; where.exe rustc 2>&1\")"
+    ]
+  }
+}
