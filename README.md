@@ -12,6 +12,7 @@ A fast, distraction-free desktop browser for reading the news. Built in Rust wit
 - **Mouse-clickable links** — click any `[N] link` to navigate
 - **Fast** — no rendering engine, no layout engine, just text
 - **Native desktop window** — built with [egui](https://github.com/emilk/egui) / [eframe](https://github.com/emilk/egui/tree/master/crates/eframe)
+- **Dark / light mode toggle** — `☀` / `🌙` button in the toolbar, switches instantly
 - **Back / Forward navigation** with toolbar buttons and `Alt+←` / `Alt+→`
 - **Configurable home page** via config file or environment variable
 - **HTTPS** with system certificate store (no configuration needed)
@@ -23,7 +24,7 @@ A fast, distraction-free desktop browser for reading the news. Built in Rust wit
 
 ```
 ┌─ Lightning Text Only Browser ──────────────────────────────────────┐
-│ [←] [→]  https://text.npr.org                              [Go]    │
+│ [←] [→]  https://text.npr.org                        [Go]  [☀]   │
 ├────────────────────────────────────────────────────────────────────┤
 │  NPR : National Public Radio                                       │
 │  ────────────────────────────                                      │
@@ -72,11 +73,12 @@ Or add the binary to your PATH and just type `tob`.
 
 | Action | How |
 |--------|-----|
-| Follow a link | Click it, or type its number (1–9) in the URL bar |
-| Go back | Click `←` button or press `Alt+←` |
-| Go forward | Click `→` button or press `Alt+→` |
+| Follow a link | Click any `[N] link text` |
+| Go back | Click `←` toolbar button or press `Alt+←` |
+| Go forward | Click `→` toolbar button or press `Alt+→` |
 | Navigate to URL | Click the address bar, type URL, press `Enter` or click `Go` |
 | Reload | Press `Enter` in the address bar with the current URL |
+| Toggle dark/light mode | Click the `☀` / `🌙` button in the toolbar |
 
 ---
 

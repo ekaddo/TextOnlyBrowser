@@ -20,6 +20,13 @@ impl BrowserUi {
 
 impl eframe::App for BrowserUi {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        // Apply theme every frame so toggling takes effect immediately
+        if self.inner.dark_mode {
+            ctx.set_visuals(egui::Visuals::dark());
+        } else {
+            ctx.set_visuals(egui::Visuals::light());
+        }
+
         // Pick up any completed fetch results
         self.inner.poll_fetch_results(ctx);
 
@@ -66,9 +73,11 @@ impl BrowserUi {
                 browser::go_forward(&mut self.inner, self.client.clone());
             }
 
-            // URL text input — takes remaining width minus the Go button
+            // URL text input — takes remaining width minus the Go button and theme toggle
             let go_width = 32.0;
-            let available = ui.available_width() - go_width - ui.spacing().item_spacing.x;
+            let toggle_width = 32.0;
+            let available = ui.available_width() - go_width - toggle_width
+                - 2.0 * ui.spacing().item_spacing.x;
             let url_edit = ui.add_sized(
                 [available, ui.spacing().interact_size.y],
                 egui::TextEdit::singleline(&mut self.inner.url_input)
@@ -83,6 +92,12 @@ impl BrowserUi {
             // Go button
             if ui.button("Go").clicked() {
                 self.submit_url();
+            }
+
+            // Dark / light mode toggle
+            let theme_icon = if self.inner.dark_mode { "☀" } else { "🌙" };
+            if ui.button(theme_icon).on_hover_text("Toggle dark/light mode").clicked() {
+                self.inner.dark_mode = !self.inner.dark_mode;
             }
 
             // Alt+← / Alt+→ keyboard shortcuts (when URL bar is not focused)
@@ -136,10 +151,19 @@ impl BrowserUi {
         });
     }
 
+    fn link_color(&self) -> Color32 {
+        if self.inner.dark_mode {
+            Color32::from_rgb(100, 180, 255)
+        } else {
+            Color32::from_rgb(0, 90, 200)
+        }
+    }
+
     fn draw_content(&mut self, ui: &mut Ui) {
         // Collect any link URL the user clicks — resolved after the scroll area
         // borrow ends to avoid conflicting borrows on self.
         let mut navigate_to: Option<String> = None;
+        let link_color = self.link_color();
 
         let mut scroll = egui::ScrollArea::vertical();
         if self.inner.scroll_to_top {
@@ -211,7 +235,7 @@ impl BrowserUi {
                                     let resp = ui.add(
                                         egui::Label::new(
                                             RichText::new(label)
-                                                .color(Color32::from_rgb(100, 180, 255))
+                                                .color(link_color)
                                                 .underline()
                                                 .size(24.0),
                                         )
