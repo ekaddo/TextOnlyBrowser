@@ -124,10 +124,10 @@ fn wrap_paragraph(
                         .fg(Color::DarkGray)
                 };
 
-                let marker = format!("[{}]", number);
-                let full_width = UnicodeWidthStr::width(text.as_str())
-                    + 1 // space before marker
-                    + UnicodeWidthStr::width(marker.as_str());
+                // Render as "[N] link text" — marker first, like w3m/lynx
+                let marker = format!("[{}] ", number);
+                let full_width = UnicodeWidthStr::width(marker.as_str())
+                    + UnicodeWidthStr::width(text.as_str());
 
                 let space_needed = if current_width > 0 { 1 } else { 0 };
 
@@ -141,10 +141,10 @@ fn wrap_paragraph(
                     current_width += 1;
                 }
 
-                current_spans.push(Span::styled(text.clone(), text_style));
                 current_spans.push(Span::styled(marker.clone(), marker_style));
-                current_width += UnicodeWidthStr::width(text.as_str())
-                    + UnicodeWidthStr::width(marker.as_str());
+                current_spans.push(Span::styled(text.clone(), text_style));
+                current_width += UnicodeWidthStr::width(marker.as_str())
+                    + UnicodeWidthStr::width(text.as_str());
             }
         }
     }

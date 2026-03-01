@@ -32,6 +32,9 @@ A speedy, text-only terminal browser for reading the news. Built in Rust with a 
 - [ ] **Smoke test** — run `./target/release/tob.exe`, verify HN loads
 
 ### Bugs / Known Gaps
+- [x] Hyperlinks: links rendered as `text[N]` — fixed to `[N] text` (w3m style, more intuitive)
+- [x] Hyperlinks: no way to follow a link without Tab-selecting first — fixed with 1-9 number keys
+- [x] URL bar: opened empty — fixed to pre-populate with current URL
 - [ ] Parser: `<a>` tags inside block elements may double-flush paragraph — needs testing on real pages
 - [ ] Renderer: very long unbreakable words (URLs in body text) overflow the column width
 - [ ] History: `go_back()` calls `history.back()` which pops current, then `navigate_to_no_push` — verify the stack doesn't drift after several back/forward cycles
@@ -104,9 +107,10 @@ max_redirects = 10
 | `↓` / `j` | Scroll down |
 | `Page Up` | Scroll up one page |
 | `Page Down` | Scroll down one page |
-| `Tab` | Select next link |
+| `1`–`9` | Follow link by number directly |
+| `Tab` | Select next link (highlights it) |
 | `Shift+Tab` | Select previous link |
-| `Enter` | Follow selected link |
+| `Enter` | Follow selected/highlighted link |
 | `b` / `Backspace` | Go back |
 | `f` | Go forward |
 | `u` / `g` | Open URL bar |

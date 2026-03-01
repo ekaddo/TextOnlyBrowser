@@ -128,6 +128,15 @@ fn handle_action(app: &mut App, action: Action, client: &reqwest::Client, term_w
             }
         }
 
+        Action::GoToLink(n) => {
+            if let Some(page) = &app.page {
+                if let Some(link) = page.links.iter().find(|l| l.number == n) {
+                    let url = link.url.clone();
+                    browser::navigate_to(app, url, client.clone());
+                }
+            }
+        }
+
         Action::GoBack => {
             browser::go_back(app, client.clone());
         }
@@ -137,13 +146,17 @@ fn handle_action(app: &mut App, action: Action, client: &reqwest::Client, term_w
 
         Action::OpenUrlBar => {
             app.mode = Mode::UrlEntry;
-            app.url_input.clear();
+            // Pre-populate with the current URL so the user can edit it
+            app.url_input = app.current_url().to_string();
         }
 
         Action::UrlInputChar(c) => {
             app.url_input.push(c);
         }
         Action::UrlInputBackspace => {
+            app.url_input.pop();
+        }
+        Action::UrlInputDelete => {
             app.url_input.pop();
         }
         Action::UrlInputSubmit => {

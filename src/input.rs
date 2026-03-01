@@ -12,11 +12,13 @@ pub enum Action {
     TabNext,
     TabPrev,
     FollowSelected,
+    GoToLink(usize),
     GoBack,
     GoForward,
     OpenUrlBar,
     UrlInputChar(char),
     UrlInputBackspace,
+    UrlInputDelete,
     UrlInputSubmit,
     UrlInputCancel,
     Resize(u16, u16),
@@ -42,12 +44,17 @@ pub fn map_event(event: Event, mode: &Mode) -> Action {
                 KeyCode::Char('b') | KeyCode::Backspace => Action::GoBack,
                 KeyCode::Char('f') => Action::GoForward,
                 KeyCode::Char('u') | KeyCode::Char('g') => Action::OpenUrlBar,
+                // Number keys 1-9 jump directly to that link
+                KeyCode::Char(c) if c.is_ascii_digit() && c != '0' => {
+                    Action::GoToLink(c as usize - '0' as usize)
+                }
                 _ => Action::None,
             },
             Mode::UrlEntry => match key.code {
                 KeyCode::Esc => Action::UrlInputCancel,
                 KeyCode::Enter => Action::UrlInputSubmit,
                 KeyCode::Backspace => Action::UrlInputBackspace,
+                KeyCode::Delete => Action::UrlInputDelete,
                 KeyCode::Char(c) => Action::UrlInputChar(c),
                 _ => Action::None,
             },

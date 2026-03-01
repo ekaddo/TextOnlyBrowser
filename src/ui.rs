@@ -127,8 +127,10 @@ fn build_status(app: &App) -> Line<'static> {
             Line::from(vec![
                 Span::styled("  ↑↓", key_style),
                 Span::styled(":scroll  ", dim_style),
+                Span::styled("1-9", key_style),
+                Span::styled(":follow link  ", dim_style),
                 Span::styled("Tab", key_style),
-                Span::styled(":link  ", dim_style),
+                Span::styled(":select  ", dim_style),
                 Span::styled("Enter", key_style),
                 Span::styled(":follow  ", dim_style),
                 Span::styled("b", key_style),
