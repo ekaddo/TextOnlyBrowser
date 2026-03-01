@@ -177,7 +177,7 @@ impl BrowserUi {
 
                     ui.horizontal_wrapped(|ui| {
                         // Tighten spacing so words flow naturally
-                        ui.spacing_mut().item_spacing.x = 3.0;
+                        ui.spacing_mut().item_spacing.x = 4.0;
 
                         for segment in para {
                             match segment {
@@ -187,9 +187,9 @@ impl BrowserUi {
                                     let hashes = text.len() - trimmed.len();
                                     if hashes > 0 && text.starts_with('#') {
                                         let size = match hashes {
-                                            1 => 20.0,
-                                            2 => 17.0,
-                                            _ => 15.0,
+                                            1 => 32.0,
+                                            2 => 28.0,
+                                            _ => 24.0,
                                         };
                                         let label_text = trimmed.trim();
                                         if !label_text.is_empty() {
@@ -202,7 +202,7 @@ impl BrowserUi {
                                     } else {
                                         // Emit word by word so horizontal_wrapped can wrap
                                         for word in text.split_whitespace() {
-                                            ui.label(word);
+                                            ui.label(RichText::new(word).size(24.0));
                                         }
                                     }
                                 }
@@ -212,7 +212,8 @@ impl BrowserUi {
                                         egui::Label::new(
                                             RichText::new(label)
                                                 .color(Color32::from_rgb(100, 180, 255))
-                                                .underline(),
+                                                .underline()
+                                                .size(24.0),
                                         )
                                         .sense(Sense::click()),
                                     );
